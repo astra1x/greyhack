@@ -1,0 +1,200 @@
+ ///////////////////////////////////////////////
+//               GSCAN V1.0.0                //
+//////////////////////////////////////////////                                       
+                                     
+// getting shell
+shell = get_shell
+computer = shell.host_computer
+
+metax = include_lib("/lib/metaxploit.so")
+
+helpInfo = "FLAG DESCRIPTION"   
+portInfo = "PORT STATUS SERVICE VERSION ADDRESS" 
+portInfoF = "PORT STATUS SERVICE"
+
+flags = ["-h","-r","-sf","-sd","{IP_ADDRESS}"]
+flagsInfo = ["Opens_a_help_menu","Scans_a_random_IP","Fast_scan","Detailed_scan","Scan_given_address"]
+
+random = false
+fastScan = false
+detailedScan = false
+
+scanAddress = function(address)
+
+    isLanIp = is_lan_ip( address )
+
+    router = null
+    ports = null
+
+    if isLanIp then
+        router = get_router;
+    else 
+        router = get_router( address )
+    end if
+
+    if router then
+        if not isLanIp then
+            ports = router.used_ports
+        else
+            ports = router.device_ports(address)
+        end if
+    end if
+
+    print("\nAddress: " + address)
+	print("Router Version: " + router.kernel_version + "\n")
+	if ports.len == 0 then
+		exit("No ports\n")
+	end if
+
+    for port in ports
+        service_info = router.port_info(port)
+        vers = "Unkown"
+        if detailedScan then
+            lan_ips = port.get_lan_ip
+        end if
+        port_status = "open"
+
+        //info = info + "\n " + port.port_number + " " + port_status + " " + service_info + " " + vers + " " + lan_ips
+
+        if(port.is_closed and not isLanIp) then
+            port_status = "closed"
+        else
+            if detailedScan then
+            	firewall_rules = router.firewall_rules
+            	if firewall_rules != null then
+	              	if firewall_rules.len > 0 then 
+		            	for rules in firewall_rules
+	        		    	print(" " + rules)
+	         		    end for	
+	            	else
+                        netSession = metax.net_use(address, port.port_number)
+                        metaLib = netSession.dump_lib
+                        vers = metaLib.lib_name + "-" + metaLib.version
+                    end if
+                end if
+            end if
+        end if
+
+        if detailedScan then
+            portInfo = portInfo +  "\n" + port.port_number + " " + port_status + " " + service_info + " " + vers + " " + lan_ips
+        else
+            portInfoF = portInfoF +  "\n" + port.port_number + " " + port_status + " " + service_info
+        end if 
+
+    end for
+    
+    if detailedScan then
+        print(format_columns(portInfo) + "\n")
+    else
+         print(format_columns(portInfoF) + "\n")
+    end if 
+
+end function
+
+randomizeAddress = function()
+    print("Beginning random search")
+    foundAddress = false
+
+    while foundAddress == false
+        min = 1
+        max = 255
+        output1 = floor(rnd * (max - min + 1) + min)
+        output2 = floor(rnd * (max - min + 1) + min)
+        output3 = floor(rnd * (max - min + 1) + min)
+        output4 = floor(rnd * (max - min + 1) + min)
+
+        ipAddress = output1+"."+output2+"."+output3+"."+output4
+
+        isLanIp = is_lan_ip( ipAddress )
+
+        router = null
+
+        if isLanIp then
+            router = get_router;
+        else 
+            router = get_router( ipAddress )
+        end if
+
+        ports = null
+
+        isPingable = shell.ping(ipAddress)
+        if isPingable then
+            if router then
+                if not isLanIp then
+                    ports = router.used_ports
+                else
+                    ports = router.device_ports(ipAddress)
+                end if
+            else
+                continue
+            end if
+        else
+            continue
+        end if
+
+        if ports.len > 0 then
+            return ipAddress
+        else 
+            continue
+        end if
+
+    end while
+
+
+end function
+
+for param in params
+	if param == "-h" then
+		print(active_user)
+		print("\n    GSCAN VERSION 1.0.0")
+		print("___________________________")
+		for flag in range(0,flags.len-1)
+			helpInfo = helpInfo + "\n" + flags[flag] + " " + flagsInfo[flag]
+		end for
+		print(format_columns(helpInfo) + "\n")
+        exit(null)
+	end if
+	if param == "-r" then
+		random = true
+	end if
+	if param == "-sf" then
+		if detailedScan == false then
+            fastScan = true
+        end if
+	end if
+	if param == "-sd" then
+	    if fastScan == false then
+            detailedScan = true
+        end if
+	end if
+end for
+
+if not fastScan and not detailedScan then
+    scanput = user_input("You forgot to put in a scan option, do you want a detailed scan? [Y/N]")
+    if scanput.upper == "Y" then
+        detailedScan = true
+    else
+        fastScan = true
+    end if
+
+end if
+
+targetAddress = null
+
+if random == true then
+    targetAddress = randomizeAddress()
+    print("Suitable address found: " + targetAddress)
+    input = user_input("Scan this address?: [Y/N]")
+    if input.upper == "Y" then
+        scanAddress(targetAddress)
+    else
+        exit(null)
+    end if
+else 
+    if params.len != 0 then
+        if not is_valid_ip(params[params.len-1]) then exit("Invalid Address")
+         targetAddress = params[params.len-1]
+         scanAddress(targetAddress)
+    end if
+
+end if
