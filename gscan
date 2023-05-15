@@ -182,6 +182,7 @@ end if
 targetAddress = null
 
 if random == true then
+
     targetAddress = randomizeAddress()
     print("Suitable address found: " + targetAddress)
     input = user_input("Scan this address?: [Y/N]")
@@ -190,7 +191,9 @@ if random == true then
     else
         exit(null)
     end if
+    
 else 
+
     if params.len != 0 then
         if not is_valid_ip(params[params.len-1]) then exit("Invalid Address")
          targetAddress = params[params.len-1]
